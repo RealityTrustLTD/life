@@ -183,10 +183,7 @@ grid_height = 24
 cell_size = 10
 color_mode = 0
 paused = False
-# Game of Life settings
-grid_width = 24
-grid_height = 24
-cell_size = 10  # Adjust size to fit your screen
+
 
 def init_grid():
     # Each cell has [state, age]
