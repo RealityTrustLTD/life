@@ -33,6 +33,19 @@ class LCD_1inch3(framebuf.FrameBuffer):
         self.blue = 0xf800
         self.white = 0xffff
         
+    @staticmethod
+    def rgb565(r, g, b):
+        """Convert RGB888 to RGB565 color format."""
+        return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+
+    # Enhanced color generation for gradients and richer colors
+    def get_gradient_color(self, position):
+        """Generate a gradient color based on position."""
+        r = int((1 + math.sin(position * 0.1)) * 127)
+        g = int((1 + math.sin(position * 0.1 + 2)) * 127)
+        b = int((1 + math.sin(position * 0.1 + 4)) * 127)
+        return LCD_1inch3.rgb565(r, g, b)
+        
     def write_cmd(self, cmd):
         self.cs(1)
         self.dc(0)
@@ -183,35 +196,38 @@ def rgb565(r, g, b):
     """Convert RGB888 to RGB565 color format."""
     return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
 
-def get_color(cell, mode):
+def get_color(lcd_instance, cell, mode, x, y, grid_width, grid_height):
+    # Check if the cell is dead or alive
     if cell[0] == 0:  # Cell is dead
-        return LCD.white
+        return lcd_instance.rgb565(255, 255, 255)  # White color for dead cells
 
+    # Variables for cell age and position-based gradient
     age = cell[1]
+    position = (x / grid_width + y / grid_height) / 2  # Calculate position for gradient
+
+    # Color modes
     if mode == 0:
-        # Color changes with age - from red to green to blue
-        r = min(255, max(0, 255 - age * 5))
-        g = min(255, max(0, age * 5 - 255))
-        b = min(255, max(0, age * 10 - 510))
+        # Gradient effect based on position
+        return lcd_instance.get_gradient_color(position)
     elif mode == 1:
         # Rainbow colors based on age
         r = int((1 + math.sin(age * 0.1)) * 127)
         g = int((1 + math.sin(age * 0.1 + 2)) * 127)
         b = int((1 + math.sin(age * 0.1 + 4)) * 127)
+        return lcd_instance.rgb565(r, g, b)
     else:
-        # Random color for each cell
-        random.seed(age)  # Seed with age to keep color consistent per age
+        # Random color for each cell, seeded with age and position
+        random.seed(age + int(position * 100))
         r = random.randint(0, 255)
         g = random.randint(0, 255)
         b = random.randint(0, 255)
+        return lcd_instance.rgb565(r, g, b)
 
-    return rgb565(r, g, b)
-
-def draw_grid(grid, color_mode):
+def draw_grid(grid, color_mode, lcd_instance):
     for y in range(grid_height):
         for x in range(grid_width):
-            color = get_color(grid[y][x], color_mode)
-            LCD.fill_rect(x * cell_size, y * cell_size, cell_size, cell_size, color)
+            color = get_color(lcd_instance, grid[y][x], color_mode, x, y, grid_width, grid_height)
+            lcd_instance.fill_rect(x * cell_size, y * cell_size, cell_size, cell_size, color)
 
 def count_neighbors(grid, x, y):
     count = 0
@@ -259,7 +275,7 @@ grid = init_grid()
 while True:
     if not paused:
         grid = update_grid(grid)
-
+    
     # Button A - Add a new random cell
     if not keyA.value():
         x, y = random.randint(0, grid_width - 1), random.randint(0, grid_height - 1)
@@ -295,7 +311,8 @@ while True:
         grid = shift_grid(grid, 1, 0)
         time.sleep(0.1)  # Debouncing
 
-    draw_grid(grid, color_mode)
+    # Inside your main loop or wherever you call draw_grid
+    draw_grid(grid, color_mode, LCD)
+
     LCD.show()
     time.sleep(0.1)
-
